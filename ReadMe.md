@@ -89,5 +89,7 @@ You must reconnect the services with your own accounts:
 
     Add labels or categories in Notion
 
-## Below is an image of this flow
-![image](https://github.com/user-attachments/assets/2333b495-7a84-4ab3-8f8e-fac4c300a838)
+## 🖼️ Flow Preview
+Below is a visual representation of this flow:
+
+![Flow Screenshot](./image.png)
