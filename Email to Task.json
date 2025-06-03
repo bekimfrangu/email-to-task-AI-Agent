@@ -1,0 +1,212 @@
+﻿{
+  "created": "1748976216365",
+  "updated": "1748976216365",
+  "name": "Email to Task",
+  "description": "",
+  "tags": [],
+  "pieces": [
+    "@activepieces/piece-gmail",
+    "@activepieces/piece-http",
+    "@activepieces/piece-notion"
+  ],
+  "template": {
+    "displayName": "Email to Task",
+    "trigger": {
+      "name": "trigger",
+      "valid": true,
+      "displayName": "New Email",
+      "type": "PIECE_TRIGGER",
+      "settings": {
+        "pieceName": "@activepieces/piece-gmail",
+        "pieceVersion": "~0.8.2",
+        "pieceType": "OFFICIAL",
+        "packageType": "REGISTRY",
+        "input": {
+          "auth": "{{connections['your-gmail-connection-id']}}",
+          "label": null
+        },
+        "inputUiInfo": {
+          "customizedInputs": {}
+        },
+        "triggerName": "gmail_new_email_received"
+      },
+      "nextAction": {
+        "name": "step_1",
+        "skip": false,
+        "type": "PIECE",
+        "valid": true,
+        "settings": {
+          "input": {
+            "url": "https://api.cohere.ai/v1/generate",
+            "body": {
+              "data": {
+                "model": "command-r-plus",
+                "prompt": "Convert the following email into a simple to-do task in JSON format with keys: task, dueDate (YYYY-MM-DD), and priority (high/medium/low). Email: {{trigger['message']['text']}}",
+                "max_tokens": 100,
+                "temperature": 0.7
+              }
+            },
+            "method": "POST",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer YOUR_COHERE_API_KEY"
+            },
+            "failsafe": false,
+            "body_type": "json",
+            "use_proxy": false,
+            "queryParams": {},
+            "proxy_settings": {}
+          },
+          "pieceName": "@activepieces/piece-http",
+          "pieceType": "OFFICIAL",
+          "actionName": "send_request",
+          "inputUiInfo": {
+            "schema": {
+              "body": {
+                "data": {
+                  "type": "JSON",
+                  "required": true,
+                  "displayName": "JSON Body"
+                }
+              },
+              "proxy_settings": {}
+            },
+            "customizedInputs": {
+              "headers": false
+            }
+          },
+          "packageType": "REGISTRY",
+          "pieceVersion": "~0.6.2",
+          "errorHandlingOptions": {
+            "retryOnFailure": {
+              "value": true
+            },
+            "continueOnFailure": {
+              "value": false
+            }
+          }
+        },
+        "nextAction": {
+          "name": "step_2",
+          "skip": false,
+          "type": "CODE",
+          "valid": true,
+          "settings": {
+            "input": {
+              "step_1_output": "{{step_1['body']['generations'][0]['text']}}"
+            },
+            "sourceCode": {
+              "code": "export const code = async (inputs) => {\n  // Get the raw response text\n  let rawText = inputs.step_1_output;\n\n  // Remove markdown ```json ... ``` wrapper if present\n  rawText = rawText.replace(/```json|```/g, \"\").trim();\n\n  // Optional: Limit to first valid JSON object if it's too long or malformed\n  try {\n    const tasks = JSON.parse(rawText);\n\n    // Return first task if it's an array\n    return Array.isArray(tasks) ? tasks : [tasks];\n  } catch (error) {\n    return {\n      error: \"Failed to parse JSON from Cohere response\",\n      rawText\n    };\n  }\n};\n",
+              "packageJson": "{}"
+            },
+            "inputUiInfo": {
+              "customizedInputs": {}
+            },
+            "errorHandlingOptions": {
+              "retryOnFailure": {
+                "value": true
+              },
+              "continueOnFailure": {
+                "value": false
+              }
+            }
+          },
+          "nextAction": {
+            "name": "step_4",
+            "skip": false,
+            "type": "LOOP_ON_ITEMS",
+            "valid": true,
+            "settings": {
+              "items": "{{step_2}}",
+              "inputUiInfo": {
+                "customizedInputs": {}
+              }
+            },
+            "displayName": "Loop on Items",
+            "firstLoopAction": {
+              "name": "step_5",
+              "skip": false,
+              "type": "PIECE",
+              "valid": true,
+              "settings": {
+                "input": {
+                  "auth": "{{connections['your-notion-connection-id']}}",
+                  "database_id": "db_id",
+                  "databaseFields": {
+                    "Date": "{{step_4['item']['dueDate']}}",
+                    "Task": "{{step_4['item']['task']}}",
+                    "Priority": "{{step_4['item']['priority']}}"
+                  }
+                },
+                "pieceName": "@activepieces/piece-notion",
+                "pieceType": "OFFICIAL",
+                "actionName": "create_database_item",
+                "inputUiInfo": {
+                  "schema": {
+                    "databaseFields": {
+                      "Date": {
+                        "type": "DATE_TIME",
+                        "required": false,
+                        "displayName": "Date"
+                      },
+                      "Task": {
+                        "type": "SHORT_TEXT",
+                        "required": false,
+                        "displayName": "Task"
+                      },
+                      "Priority": {
+                        "type": "STATIC_DROPDOWN",
+                        "options": {
+                          "options": [
+                            {
+                              "label": "High",
+                              "value": "High"
+                            },
+                            {
+                              "label": "Medium",
+                              "value": "Medium"
+                            },
+                            {
+                              "label": "Low",
+                              "value": "Low"
+                            }
+                          ],
+                          "disabled": false
+                        },
+                        "required": false,
+                        "displayName": "Priority"
+                      }
+                    }
+                  },
+                  "customizedInputs": {
+                    "Priority": true
+                  }
+                },
+                "packageType": "REGISTRY",
+                "pieceVersion": "~0.3.3",
+                "errorHandlingOptions": {
+                  "retryOnFailure": {
+                    "value": true
+                  },
+                  "continueOnFailure": {
+                    "value": false
+                  }
+                }
+              },
+              "displayName": "Create Database Item"
+            }
+          },
+          "displayName": "Custom Javascript Code"
+        },
+        "displayName": "Send HTTP request"
+      }
+    },
+    "valid": true,
+    "connectionIds": [
+      "your-gmail-connection-id",
+      "your-notion-connection-id"
+    ],
+    "schemaVersion": "1"
+  },
+  "blogUrl": ""
+}
